@@ -32,7 +32,93 @@ document.addEventListener('DOMContentLoaded', function() {
     // Call the generic extraction and sending function with the specific extraction logic
     extractAndSendToFoundry(extractHexDataAndTitleInjected, "hexData"); // Renamed function reference
   });
+const createMerchantButton = document.getElementById('createMerchantButton');
 
+  // Event Listener for Creating a Merchant NPC
+  createMerchantButton.addEventListener('click', function() {
+    statusDiv.textContent = 'Extracting merchant data...';
+
+    chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+      if (!tabs || tabs.length === 0) {
+        statusDiv.textContent = 'No active tab found.';
+        return;
+      }
+
+      const tabId = tabs[0].id;
+
+      // Inject the merchant extraction function into the Hexroll page
+      chrome.scripting.executeScript({
+        target: {tabId: tabId},
+        function: extractMerchantData
+      }, (injectionResults) => {
+        if (chrome.runtime.lastError) {
+          statusDiv.textContent = 'Error extracting merchant data: ' + chrome.runtime.lastError.message;
+          console.error("Extraction error:", chrome.runtime.lastError);
+          return;
+        }
+
+        const result = injectionResults[0].result;
+        if (result && result.merchantName) {
+          statusDiv.textContent = `Found merchant: ${result.merchantName}. Sending to Foundry VTT...`;
+          
+          // Send the extracted data to the background script
+          chrome.runtime.sendMessage({
+            action: "createMerchantInFoundry",
+            data: result
+          })
+          .then(response => {
+            if (response.status === "success") {
+              statusDiv.textContent = response.message;
+            } else {
+              statusDiv.textContent = `Error: ${response.message}`;
+            }
+          })
+          .catch(error => {
+            statusDiv.textContent = `Communication error: ${error.message}`;
+            console.error("Communication error:", error);
+          });
+
+        } else {
+          statusDiv.textContent = 'Could not find merchant data. Is this a merchant page?';
+        }
+      });
+    });
+  });
+
+  /**
+   * This function is INJECTED into the Hexroll page to scrape merchant data.
+   */
+  function extractMerchantData() {
+    const contentContainer = document.getElementById('entity-container');
+    if (!contentContainer) return null;
+
+    const merchantNameEl = contentContainer.querySelector('h3');
+    const merchantName = merchantNameEl ? merchantNameEl.innerText.trim() : null;
+
+    if (!merchantName) return null;
+
+    // The bio is assumed to be the paragraph immediately following the name heading
+    const merchantBioEl = merchantNameEl.nextElementSibling;
+    const merchantBio = (merchantBioEl && merchantBioEl.tagName === 'P') ? merchantBioEl.innerHTML : '';
+
+    const items = [];
+    const itemTable = contentContainer.querySelector('table');
+    if (itemTable) {
+      const itemRows = itemTable.querySelectorAll('tbody tr');
+      itemRows.forEach(row => {
+        const cells = row.querySelectorAll('td');
+        if (cells.length >= 2) {
+          const itemName = cells[0].innerText.trim();
+          const itemPrice = cells[1].innerText.trim();
+          if (itemName) {
+            items.push({ name: itemName, price: itemPrice });
+          }
+        }
+      });
+    }
+
+    return { merchantName, merchantBio, items };
+  }
   // Event Listener for Map Screenshot
   captureMapScreenshotButton.addEventListener('click', function() {
     statusDiv.textContent = 'Capturing map screenshot...';
