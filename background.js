@@ -147,6 +147,40 @@ function extractHexDataAndTitle() {
 
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // Add this as a new 'if' block inside the existing onMessage listener in background.js
+if (message.action === "createMerchantInFoundry") {
+  const merchantData = message.data;
+
+  chrome.tabs.query({ url: "https://theland.uber.space/game*" }, async (tabs) => {
+    if (tabs.length === 0) {
+      sendResponse({ status: "error", message: "Foundry VTT tab not found." });
+      return;
+    }
+    const foundryTabId = tabs[0].id;
+
+    try {
+      console.log(`Injecting createFoundryMerchantActor for ${merchantData.merchantName}...`);
+      const injectionResults = await chrome.scripting.executeScript({
+        target: { tabId: foundryTabId },
+        function: createFoundryMerchantActor,
+        args: [merchantData],
+        world: 'MAIN'
+      });
+
+      const result = injectionResults[0].result;
+      if (result.status === "success") {
+        sendResponse({ status: "success", message: result.message });
+      } else {
+        sendResponse({ status: "error", message: result.message });
+      }
+
+    } catch (error) {
+      console.error("Error during merchant creation:", error);
+      sendResponse({ status: "error", message: `Failed to inject merchant script: ${error.message}.` });
+    }
+  });
+  return true; // Keep message channel open for async response
+}
 // Handle messages for sending hex data to Foundry Journal Entry (standard case)
 if (message.action === "sendDataToFoundry") {
   const { dataType, title, content } = message;
@@ -552,5 +586,93 @@ async function updateGMNotesOnFoundryTile(hexTitle, updatedContent) {
       console.error("Error updating GM Notes on tile:", error);
       ui.notifications.error(`Failed to update GM Notes: ${error.message}`, { permanent: false, duration: 10000 });
       return { status: "error", message: `Failed to update GM Notes: ${error.message}` };
+  }
+}
+async function createFoundryMerchantActor(merchantData) {
+  // --- Helper function to parse price strings like "5 gp" or "10 sp" ---
+  function parsePrice(priceString) {
+      const parts = priceString.toLowerCase().split(' ');
+      const value = parseFloat(parts[0]) || 0;
+      const currency = parts[1] || 'gp';
+      let priceInGp = value;
+
+      if (currency === 'sp') priceInGp = value / 10;
+      else if (currency === 'cp') priceInGp = value / 100;
+      else if (currency === 'ep') priceInGp = value / 2;
+      else if (currency === 'pp') priceInGp = value * 10;
+      
+      return priceInGp;
+  }
+
+  // --- Main Logic ---
+  try {
+      if (typeof game === 'undefined' || !game.ready) {
+          ui.notifications.error("Foundry VTT is not ready. Please wait for the game to load.");
+          return { status: "error", message: "Foundry game not ready." };
+      }
+
+      ui.notifications.info(`Creating merchant: ${merchantData.merchantName}...`);
+
+      // 1. Create the Actor
+      const actor = await Actor.create({
+          name: merchantData.merchantName,
+          type: 'npc',
+          'system.details.biography.value': merchantData.merchantBio,
+      });
+
+      if (!actor) {
+          throw new Error("Actor creation failed.");
+      }
+      console.log(`Actor ${actor.name} created with ID: ${actor.id}`);
+
+      const itemsToAdd = [];
+      const compendiumPacks = ['dnd5e.items', 'dnd5e.tradegoods', 'dnd5e.spells']; // SRD packs to search
+
+      // 2. Process each item from the merchant's list
+      for (const merchantItem of merchantData.items) {
+          let foundItem = null;
+
+          // Search in the SRD compendiums first
+          for (const packName of compendiumPacks) {
+              const pack = game.packs.get(packName);
+              if (pack) {
+                  // Use getIndex to search without loading the whole compendium
+                  const index = await pack.getIndex();
+                  const match = index.find(item => item.name.toLowerCase() === merchantItem.name.toLowerCase());
+                  if (match) {
+                      foundItem = await pack.getDocument(match._id);
+                      break; // Stop searching once found
+                  }
+              }
+          }
+
+          // If not found in compendiums, create a new item
+          if (!foundItem) {
+              ui.notifications.warn(`Item "${merchantItem.name}" not in SRD. Creating a new item.`);
+              foundItem = await Item.create({
+                  name: merchantItem.name,
+                  type: 'loot', // 'loot' is a safe default for unknown items
+                  'system.price.value': parsePrice(merchantItem.price),
+              });
+          }
+
+          if (foundItem) {
+              itemsToAdd.push(foundItem.toObject()); // Add the item's data to our list
+          }
+      }
+
+      // 3. Add all collected items to the actor's inventory
+      if (itemsToAdd.length > 0) {
+          await actor.createEmbeddedDocuments('Item', itemsToAdd);
+      }
+
+      const successMsg = `Successfully created merchant "${actor.name}" with ${itemsToAdd.length} item(s).`;
+      ui.notifications.info(successMsg);
+      return { status: "success", message: successMsg };
+
+  } catch (error) {
+      console.error("Error creating Foundry merchant:", error);
+      ui.notifications.error(`Failed to create merchant: ${error.message}`);
+      return { status: "error", message: `Failed to create merchant: ${error.message}` };
   }
 }
