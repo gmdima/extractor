@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "Hexroll Integration", 
+  "version": "1.3", 
+  "description": "Extracts hex details or captures map screenshots from Hexroll.app for Foundry VTT.",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "downloads" 
+  ],
+  "host_permissions": [
+    "https://5e.hexroll.app/sandbox/*",
+    "https://theland.uber.space/game*"
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  }
+}

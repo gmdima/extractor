@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Hexroll Integration</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 10px;
+      width: 250px; /* Slightly wider to accommodate buttons */
+    }
+    .button-group {
+      display: flex;
+      flex-direction: column; /* Stack buttons vertically */
+      gap: 10px; /* Space between buttons */
+    }
+    button {
+      width: 100%; /* Make buttons take full width */
+      padding: 8px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.85em; /* Slightly smaller font for more buttons */
+      white-space: nowrap; /* Prevent text from wrapping */
+      text-align: center;
+    }
+    button:hover {
+      background-color: #45a049;
+    }
+    #status {
+      margin-top: 10px;
+      font-size: 0.9em;
+      color: #333;
+      word-wrap: break-word; /* Allow long status messages to wrap */
+    }
+  </style>
+</head>
+<body>
+  <h2>Hexroll Integration</h2>
+  <div class="button-group">
+    <button id="extractHexDataButton">Extract & Send Hex Data</button>
+    <button id="captureMapScreenshotButton">Dungeon/Town Scene Create (Screenshot)</button>
+    <button id="toggleSecretDoorsButton">Toggle Secret Doors</button>
+    <button id="addGmNotesButton">Add to GM Notes (selected tile)</button>
+    </div>
+  <div id="status"></div>
+  <script src="popup.js"></script>
+</body>
+</html>

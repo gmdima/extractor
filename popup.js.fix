@@ -1,0 +1,15 @@
+// popup.js
+
+document.addEventListener('DOMContentLoaded', function() {
+  // ... existing code ...
+  
+  function toggleSvgSecretDoors() {
+    try {
+      // ... existing function code ...
+    } catch (error) {
+      console.error("Error in toggleSvgSecretDoors:", error);
+      return { status: "error", message: `Error during toggle: ${error.message}` };
+    }
+  }
+
+}); // This closing was missing
